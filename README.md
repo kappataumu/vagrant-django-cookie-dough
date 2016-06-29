@@ -68,4 +68,4 @@ cookiecutter_options=(
 $ vagrant up
 ```
 
-There's a blog post as well, see [Jump-starting Django projects with Vagrant and Cookiecutter]().
+There's a blog post as well, see [Jump-starting Django projects with Vagrant and Cookiecutter](http://kappataumu.com/articles/vagrant-django-cookiecutter-quickstart.html).
