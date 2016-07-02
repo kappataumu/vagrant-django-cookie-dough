@@ -92,6 +92,13 @@ echo "Installing packages..."
 sudo apt-get install -y ${apt_packages[@]}
 sudo apt-get clean
 
+if [[ ! -d "/srv/www/$domain_name" ]]; then
+	mkdir "/srv/www/$domain_name"
+	mkdir "/srv/www/$domain_name/logs"
+fi
+
+cd "/srv/www/$domain_name"
+
 # Install and configure pyenv and pyenv-virtualenv
 git clone https://github.com/yyuu/pyenv.git /home/vagrant/.pyenv
 git clone https://github.com/yyuu/pyenv-virtualenv.git /home/vagrant/.pyenv/plugins/pyenv-virtualenv
@@ -102,18 +109,16 @@ eval "$(pyenv init -)"
 
 pyenv install 3.5.1
 pyenv virtualenv 3.5.1 "$domain_name"
-
-if [[ ! -d "/srv/www/$domain_name" ]]; then
-	mkdir "/srv/www/$domain_name"
-	mkdir "/srv/www/$domain_name/logs"
-fi
- 
-cd "/srv/www/$domain_name"
 pyenv local "$domain_name"
+local_python=$(pyenv which python)
 
 # Install cookiecutter and configure cookiecutter-django
 pip install git+https://github.com/audreyr/cookiecutter.git@master
 cookiecutter --no-input https://github.com/pydanny/cookiecutter-django "${cookiecutter_options[@]}"
+
+# Install the Django requirements for development
+cd "/srv/www/$domain_name/$project_slug"
+pip install -r requirements/local.txt
 
 if sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw $project_slug; then
 	echo "PostgreSQL database exists. Skipping setup."
@@ -125,10 +130,6 @@ else
 	sudo -u postgres psql -c "ALTER ROLE $db_user SET timezone TO 'UTC'"
 	sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $project_slug TO $db_user"
 fi
-
-cd "/srv/www/$domain_name/$project_slug"
-
-pip install -r requirements/local.txt
 
 # TODO Add this to .env, inject .env env vars in the shell
 export DATABASE_URL="postgres://$db_user:$db_password@127.0.0.1:5432/$project_slug"
@@ -143,14 +144,13 @@ if [[ -f 'Gruntfile.js' ]]; then
 fi
 
 if [[ -f 'gulpfile.js' ]]; then
-	# No symlinks, important for Vagrant on Windows
 	npm install --no-bin-links  
 	npm install --global gulp-cli
 	# TODO Verify that gulp actually works
-	cmd_js_task="gulp --gulpfile /srv/www/$domain_name/$project_slug/gulpfile.js >> /srv/www/$domain_name/logs/taskrunner.log 2>&1 &"
+	cmd_js_task="gulp --gulpfile /srv/www/$domain_name/$project_slug/gulpfile.js > /srv/www/$domain_name/logs/taskrunner.log 2>&1 &"
 fi
 
-cmd_runserver="/home/vagrant/.pyenv/versions/example.com/bin/python /srv/www/$domain_name/$project_slug/manage.py runserver 0.0.0.0:8000 > /srv/www/$domain_name/logs/runserver.log 2>&1"
+cmd_runserver="$local_python /srv/www/$domain_name/$project_slug/manage.py runserver 0.0.0.0:8000 > /srv/www/$domain_name/logs/runserver.log 2>&1"
 
 eval "$cmd_runserver &"
 eval "$cmd_js_task &"
